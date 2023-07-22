@@ -1,5 +1,8 @@
 package io.dataease.controller.request.panel;
 
+import io.dataease.controller.request.chart.ChartExtRequest;
+import io.dataease.dto.PermissionProxy;
+import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.util.List;
@@ -29,5 +32,14 @@ public class PanelViewDetailsRequest {
     private int snapshotHeight;
 
     private ViewDetailField[] detailFields;
+
+    private ChartExtRequest componentFilterInfo;
+
+    private List<String> excelHeaderKeys;
+
+    @ApiModelProperty(hidden = true)
+    private PermissionProxy proxy;
+
+    private Long userId;
 
 }

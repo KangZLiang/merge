@@ -434,9 +434,9 @@ public class OracleQueryProvider extends QueryProvider {
         fieldCustomFilter.add(chartFieldCustomFilterDTO);
 
         if (isTable) {
-            return "SELECT * FROM (" + sqlFix(originalTableInfo(table, xAxis, fieldCustomFilter, rowPermissionsTree, extFilterRequestList, ds, view)) + ") DE_RESULT_TMP " + " WHERE DE_ROWNUM >= " + (pageInfo.getGoPage() - 1) * pageInfo.getPageSize();
+            return "SELECT * FROM (" + sqlFix(originalTableInfo(table, xAxis, fieldCustomFilter, rowPermissionsTree, extFilterRequestList, ds, view)) + ") DE_RESULT_TMP " + " WHERE DE_ROWNUM > " + (pageInfo.getGoPage() - 1) * pageInfo.getPageSize();
         } else {
-            return "SELECT * FROM (" + sqlFix(originalTableInfo("(" + sqlFix(table) + ")", xAxis, fieldCustomFilter, rowPermissionsTree, extFilterRequestList, ds, view)) + ") DE_RESULT_TMP " + " WHERE DE_ROWNUM >= " + (pageInfo.getGoPage() - 1) * pageInfo.getPageSize();
+            return "SELECT * FROM (" + sqlFix(originalTableInfo("(" + sqlFix(table) + ")", xAxis, fieldCustomFilter, rowPermissionsTree, extFilterRequestList, ds, view)) + ") DE_RESULT_TMP " + " WHERE DE_ROWNUM > " + (pageInfo.getGoPage() - 1) * pageInfo.getPageSize();
         }
     }
 
@@ -880,6 +880,7 @@ public class OracleQueryProvider extends QueryProvider {
             ChartViewFieldDTO f = new ChartViewFieldDTO();
             f.setOriginName(datasetTableField.getOriginName());
             f.setDeType(0);
+            f.setType(datasetTableField.getType());
             xAxis.add(f);
         });
 
@@ -916,6 +917,9 @@ public class OracleQueryProvider extends QueryProvider {
                     continue;
                 }
                 String originField = String.format(OracleConstants.KEYWORD_FIX, tableObj.getTableAlias(), x.getOriginName());
+                if(xAxis.get(i).getType().equals("DATE")){
+                    originField = String.format(OracleConstants.TO_CHAR, originField, OracleConstants.DEFAULT_DATE_FORMAT);
+                }
                 String fieldAlias = String.format(OracleConstants.KEYWORD_TABLE, x.getOriginName());
                 xFields.add(getXFields(x, originField, fieldAlias));
             }
@@ -942,7 +946,7 @@ public class OracleQueryProvider extends QueryProvider {
                 .build();
         if (ObjectUtils.isNotEmpty(tableSQL)) st.add("table", tableSQL);
 
-        return "SELECT * FROM (" + sqlFix(st.render()) + ") DE_RESULT_TMP " + " WHERE DE_ROWNUM >= DE_OFFSET";
+        return "SELECT * FROM (" + sqlFix(st.render()) + ") DE_RESULT_TMP " + " WHERE DE_ROWNUM > DE_OFFSET";
     }
 
     @Override
@@ -1202,17 +1206,32 @@ public class OracleQueryProvider extends QueryProvider {
                     originName = String.format(OracleConstants.KEYWORD_FIX, tableObj.getTableAlias(), field.getOriginName());
                 }
 
+                String format = transDateFormat(request.getDateStyle(), request.getDatePattern());
                 if (field.getDeType() == 1) {
                     if (field.getDeExtractType() == 0 || field.getDeExtractType() == 5) {
-                        whereName = String.format(OracleConstants.TO_DATE, originName, StringUtils.isNotEmpty(field.getDateFormat()) ? field.getDateFormat() : OracleConstants.DEFAULT_DATE_FORMAT);
+                        if(!request.getOperator().equals("between")){
+                            whereName = String.format(OracleConstants.TO_CHAR, String.format(OracleConstants.TO_DATE, originName, StringUtils.isNotEmpty(field.getDateFormat()) ? field.getDateFormat() : OracleConstants.DEFAULT_DATE_FORMAT), format);
+                        } else {
+                            whereName = String.format(OracleConstants.TO_DATE, originName, StringUtils.isNotEmpty(field.getDateFormat()) ? field.getDateFormat() : OracleConstants.DEFAULT_DATE_FORMAT);
+                        }
                     }
                     if (field.getDeExtractType() == 2 || field.getDeExtractType() == 3 || field.getDeExtractType() == 4) {
-                        String cast = String.format(OracleConstants.CAST, originName, OracleConstants.DEFAULT_INT_FORMAT) + "/1000";
-                        whereName = String.format(OracleConstants.FROM_UNIXTIME, cast, OracleConstants.DEFAULT_DATE_FORMAT);
+                        if(!request.getOperator().equals("between")){
+                            String cast = String.format(OracleConstants.CAST, originName, OracleConstants.DEFAULT_INT_FORMAT) + "/1000";
+                            whereName = String.format(OracleConstants.FROM_UNIXTIME, cast, format);
+                        } else {
+                            String cast = String.format(OracleConstants.CAST, originName, OracleConstants.DEFAULT_INT_FORMAT) + "/1000";
+                            whereName = String.format(OracleConstants.FROM_UNIXTIME, cast, OracleConstants.DEFAULT_DATE_FORMAT);
+                        }
                     }
                     if (field.getDeExtractType() == 1) {
-                        whereName = originName;
+                        if(!request.getOperator().equals("between")){
+                            whereName = String.format(OracleConstants.TO_CHAR, originName, format);
+                        } else {
+                            whereName = originName;
+                        }
                     }
+
                 } else if (field.getDeType() == 2 || field.getDeType() == 3) {
                     if (field.getDeExtractType() == 0 || field.getDeExtractType() == 5) {
                         whereName = String.format(OracleConstants.CAST, originName, OracleConstants.DEFAULT_FLOAT_FORMAT);
@@ -1241,7 +1260,9 @@ public class OracleQueryProvider extends QueryProvider {
             if (StringUtils.containsIgnoreCase(request.getOperator(), "in")) {
                 whereValue = "('" + StringUtils.join(value, "','") + "')";
             } else if (StringUtils.containsIgnoreCase(request.getOperator(), "like")) {
-                whereValue = "'%" + value.get(0) + "%'";
+                String keyword = value.get(0).toUpperCase();
+                whereValue = "'%" + keyword + "%'";
+                whereName = "upper(" + whereName + ")";
             } else if (StringUtils.containsIgnoreCase(request.getOperator(), "between")) {
                 if (request.getDatasetTableField().getDeType() == 1) {
                     SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");

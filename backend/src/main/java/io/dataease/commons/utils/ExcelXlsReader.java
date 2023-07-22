@@ -112,11 +112,6 @@ public class ExcelXlsReader implements HSSFListener {
      */
     private boolean isDateFormat = false;
 
-    /**
-     * 是否存在合并单元格
-     */
-    private Boolean isMergeCell = false;
-
 
     public List<TableField> getFields() {
         return fields;
@@ -155,40 +150,6 @@ public class ExcelXlsReader implements HSSFListener {
         }
         factory.processWorkbookEvents(request, fs);
 
-        //存在合并单元格
-        if (isMergeCell) {
-            //遍历表格里面所有的sheets
-            for (int i = 0; i < totalSheets.size(); i++) {
-                ExcelSheetData sheetData = totalSheets.get(i);
-                List<List<String>> sheetDataList = sheetData.getData();
-                for (int j = 0; j < sheetDataList.size(); j++) {
-                    List<String> stringList = sheetDataList.get(j);
-                    if (stringList.size() == 2) {
-                        for (int k = 0; k < stringList.size(); k++) {
-                            //如果是第一行
-                            if (j > 0) {
-                                String str = stringList.get(k);
-                                //判断里面所有属性
-                                if (str == null || "".equals(str)) {
-                                    List<String> datas = sheetDataList.get(j - 1);
-                                    if (datas.size() == 2) {
-                                        String sData = datas.get(k);
-                                        if (sData == null || "".equals(sData)) {
-                                            //注释则允许为空
-                                            //throw new RuntimeException(Translator.get("i18n_excel_have_merge_error"));
-                                        }else{
-                                            sheetDataList.get(j).set(k,sData);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                totalSheets.get(i).setData(sheetDataList);
-            }
-        }
-
         return totalRows; //返回该excel文件的总行数，不包括首列和空行
     }
 
@@ -224,9 +185,7 @@ public class ExcelXlsReader implements HSSFListener {
                 }
                 break;
             case MergeCellsRecord.sid:
-//                throw new RuntimeException(Translator.get("i18n_excel_have_merge_region"));
-                isMergeCell = true ;
-                break;
+                throw new RuntimeException(Translator.get("i18n_excel_have_merge_region"));
             case SSTRecord.sid:
                 sstRecord = (SSTRecord) record;
                 break;

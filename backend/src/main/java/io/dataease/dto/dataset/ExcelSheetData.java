@@ -31,11 +31,4 @@ public class ExcelSheetData {
     @ApiModelProperty("字段变更")
     private Boolean changeFiled = false;
     private Boolean effectExtField = false;
-
-    public List<List<String>> getData() {
-        return data;
-    }
-    public void setData(List<List<String>> data) {
-        this.data = data;
-    }
 }

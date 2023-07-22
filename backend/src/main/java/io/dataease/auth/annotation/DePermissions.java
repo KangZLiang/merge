@@ -16,4 +16,6 @@ public @interface DePermissions {
 
     Logical logical() default Logical.AND;
 
+
+
 }

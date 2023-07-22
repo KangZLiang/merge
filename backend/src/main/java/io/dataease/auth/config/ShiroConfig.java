@@ -52,24 +52,9 @@ public class ShiroConfig {
         factoryBean.setSecurityManager(securityManager);
         factoryBean.setLoginUrl("/login");
         factoryBean.setUnauthorizedUrl("/login");
-        factoryBean.setFilterChainDefinitionMap(getFilterChainDefinitionMap(shiroService));
+        factoryBean.setFilterChainDefinitionMap(shiroService.loadFilterChainDefinitionMap());
         factoryBean.setFilters(filterMap);
         return factoryBean;
-    }
-
-    /**
-     * 设置放行地址
-     * @return
-     */
-    public Map<String, String> getFilterChainDefinitionMap(ShiroService shiroService){
-        Map<String, String> anonMap = shiroService.loadFilterChainDefinitionMap();
-        //放行的链接
-        anonMap.put("/**/makerwit/**", "anon");
-        anonMap.put("/**/openapi/**", "anon");
-        //设置其他链接拦截
-        anonMap.put("/**", "authc");
-        anonMap.put("/**", "jwt");
-        return anonMap;
     }
 
     /**

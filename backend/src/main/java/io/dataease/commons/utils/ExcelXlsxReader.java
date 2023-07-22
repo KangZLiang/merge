@@ -2,6 +2,7 @@ package io.dataease.commons.utils;
 
 import io.dataease.dto.dataset.ExcelSheetData;
 import io.dataease.i18n.Translator;
+import io.dataease.plugins.common.base.domain.DatasetTableField;
 import io.dataease.plugins.common.dto.datasource.TableField;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.poi.openxml4j.opc.OPCPackage;
@@ -109,6 +110,16 @@ public class ExcelXlsxReader extends DefaultHandler {
     //定义该文档一行最大的单元格数，用来补全一行最后可能缺失的单元格
     private String maxRef = null;
 
+    public List<DatasetTableField> getDatasetTableFields() {
+        return datasetTableFields;
+    }
+
+    public void setDatasetTableFields(List<DatasetTableField> datasetTableFields) {
+        this.datasetTableFields = datasetTableFields;
+    }
+
+    private List<DatasetTableField> datasetTableFields = null;
+
     /**
      * 单元格
      */
@@ -121,11 +132,6 @@ public class ExcelXlsxReader extends DefaultHandler {
      * 是否为日期
      */
     private boolean isDateFormat = false;
-
-    /**
-     * 是否存在合并单元格
-     */
-    private Boolean isMergeCell = false;
 
     public Integer getObtainedNum() {
         return obtainedNum;
@@ -182,36 +188,6 @@ public class ExcelXlsxReader extends DefaultHandler {
 
             sheet.close();
         }
-
-        //存在合并单元格
-        if (isMergeCell) {
-            //遍历表格里面所有的sheets
-            for (int i = 0; i < totalSheets.size(); i++) {
-                ExcelSheetData sheetData = totalSheets.get(i);
-                List<List<String>> sheetDataList = sheetData.getData();
-                for (int j = 0; j < sheetDataList.size(); j++) {
-                    List<String> stringList = sheetDataList.get(j);
-                    for (int k = 0; k < stringList.size(); k++) {
-                        //如果是第一行
-                        if (j > 0) {
-                            String str = stringList.get(k);
-                            //判断里面所有属性
-                            if (str == null || "".equals(str)) {
-                                String sData = sheetDataList.get(j - 1).get(k);
-                                if (sData == null || "".equals(sData)) {
-                                    //注释则允许为空
-                                    //throw new RuntimeException(Translator.get("i18n_excel_have_merge_error"));
-                                }else{
-                                    sheetDataList.get(j).set(k,sData);
-                                }
-                            }
-                        }
-                    }
-                }
-                totalSheets.get(i).setData(sheetDataList);
-            }
-        }
-
         return totalRows; //返回该excel文件的总行数，不包括首列和空行
     }
 
@@ -229,10 +205,9 @@ public class ExcelXlsxReader extends DefaultHandler {
         if (this.obtainedNum != null && curRow > this.obtainedNum) {
             return;
         }
-        //存在合并单元格
+
         if (name.equalsIgnoreCase("mergeCell")) {
-            isMergeCell = true ;
-//            throw new RuntimeException(Translator.get("i18n_excel_have_merge_region"));
+            throw new RuntimeException(Translator.get("i18n_excel_have_merge_region"));
         }
         //c => 单元格
         if ("c".equals(name)) {
@@ -395,8 +370,8 @@ public class ExcelXlsxReader extends DefaultHandler {
             formatIndex = style.getDataFormat();
             formatString = style.getDataFormatString();
             short format = this.formatIndex;
-            if ((14 <= format && format <= 17) || format == 0 || format == 20 || format == 22 || format == 31 || format == 35 || (45 <= format && format <= 49) || format == 46 || format == 47 || (57 <= format && format <= 59)
-                    || (59 < format && format <= 76) || (175 < format && format <= 196) || (210 <= format && format <= 213) || (208 == format)) { // 日期
+            if ((14 <= format && format <= 17) || format == 20 || format == 22 || format == 31 || format == 35 || format == 45 || format == 46 || format == 47 || (57 <= format && format <= 59)
+                    || (175 < format && format < 178) || (182 <= format && format <= 196) || (210 <= format && format <= 213) || (208 == format)) { // 日期
                 isDateFormat = true;
             }
 
@@ -454,10 +429,10 @@ public class ExcelXlsxReader extends DefaultHandler {
                 break;
             case NUMBER: //数字
                 if (formatString != null && isDateFormat) {
-                    if (obtainedNum != null) {
-                        thisStr = formatter.formatRawCellContents(Double.parseDouble(value), formatIndex, formatString).trim();
-                    } else {
+                    if (getDatasetTableFields() != null && getDatasetTableFields().get(curCol).getDeExtractType() == 1) {
                         thisStr = formatter.formatRawCellContents(Double.parseDouble(value), formatIndex, "yyyy-mm-dd hh:mm:ss").trim();
+                    } else {
+                        thisStr = formatter.formatRawCellContents(Double.parseDouble(value), formatIndex, formatString).trim();
                     }
                 } else {
                     thisStr = value;

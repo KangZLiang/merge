@@ -171,7 +171,7 @@ public class DirectFieldService implements DataSetFieldService {
                 if (dataTableInfoDTO.isBase64Encryption()) {
                     sql = new String(java.util.Base64.getDecoder().decode(sql));
                 }
-                sql = dataSetTableService.removeVariables(sql, ds.getType());
+                sql = dataSetTableService.handleVariableDefaultValue(sql, null, ds.getType(), false);
                 datasourceRequest.setQuery(qp.createQuerySQLAsTmp(sql, permissionFields, !needSort, customFilter, rowPermissionsTree, deSortFields));
             } else if (StringUtils.equalsIgnoreCase(datasetTable.getType(), DatasetType.CUSTOM.toString())) {
                 DataTableInfoDTO dt = new Gson().fromJson(datasetTable.getInfo(), DataTableInfoDTO.class);
@@ -195,6 +195,7 @@ public class DirectFieldService implements DataSetFieldService {
             datasourceRequest.setQuery(qp.createQuerySQL(tableName, permissionFields, !needSort, null, customFilter, rowPermissionsTree, deSortFields));
         }
         LogUtil.info(datasourceRequest.getQuery());
+        datasourceRequest.setPermissionFields(permissionFields);
         List<String[]> rows = datasourceProvider.getData(datasourceRequest);
         if (!needMapping) {
             List<Object> results = rows.stream().map(row -> row[0]).distinct().collect(Collectors.toList());

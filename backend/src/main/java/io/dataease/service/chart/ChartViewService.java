@@ -34,6 +34,7 @@ import io.dataease.plugins.common.base.mapper.DatasetTableFieldMapper;
 import io.dataease.plugins.common.base.mapper.PanelViewMapper;
 import io.dataease.plugins.common.constants.DatasetType;
 import io.dataease.plugins.common.constants.datasource.SQLConstants;
+import io.dataease.plugins.common.dto.chart.ChartCustomFilterItemDTO;
 import io.dataease.plugins.common.dto.chart.ChartFieldCompareDTO;
 import io.dataease.plugins.common.dto.chart.ChartFieldCustomFilterDTO;
 import io.dataease.plugins.common.dto.chart.ChartViewFieldDTO;
@@ -49,6 +50,7 @@ import io.dataease.plugins.view.entity.*;
 import io.dataease.plugins.view.service.ViewPluginService;
 import io.dataease.plugins.xpack.auth.dto.request.ColumnPermissionItem;
 import io.dataease.provider.ProviderFactory;
+import io.dataease.provider.query.SQLUtils;
 import io.dataease.service.chart.util.ChartDataBuild;
 import io.dataease.service.dataset.*;
 import io.dataease.service.datasource.DatasourceService;
@@ -72,6 +74,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * @Author gin
@@ -397,7 +400,6 @@ public class ChartViewService {
                 }
                 break;
             case "text":
-            case "battery":
             case "gauge":
             case "liquid":
                 xAxis = new ArrayList<>();
@@ -469,7 +471,7 @@ public class ChartViewService {
             QueryProvider qp = ProviderFactory.getQueryProvider(ds.getType());
             if (StringUtils.equalsIgnoreCase(table.getType(), DatasetType.DB.name())) {
                 datasourceRequest.setTable(dataTableInfoDTO.getTable());
-                if (StringUtils.equalsIgnoreCase("text", view.getType()) || StringUtils.equalsIgnoreCase("battery", view.getType()) || StringUtils.equalsIgnoreCase("gauge", view.getType()) || StringUtils.equalsIgnoreCase("liquid", view.getType())) {
+                if (StringUtils.equalsIgnoreCase("text", view.getType()) || StringUtils.equalsIgnoreCase("gauge", view.getType()) || StringUtils.equalsIgnoreCase("liquid", view.getType())) {
                     datasourceRequest.setQuery(qp.getSQLSummary(dataTableInfoDTO.getTable(), yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, view, ds));
                 } else if (StringUtils.containsIgnoreCase(view.getType(), "stack")) {
                     datasourceRequest.setQuery(qp.getSQLStack(dataTableInfoDTO.getTable(), xAxis, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, extStack, ds, view));
@@ -483,7 +485,7 @@ public class ChartViewService {
             } else if (StringUtils.equalsIgnoreCase(table.getType(), DatasetType.SQL.name())) {
                 String sql = dataTableInfoDTO.isBase64Encryption() ? new String(java.util.Base64.getDecoder().decode(dataTableInfoDTO.getSql())) : dataTableInfoDTO.getSql();
                 sql = handleVariable(sql, requestList, qp, table, ds);
-                if (StringUtils.equalsIgnoreCase("text", view.getType()) || StringUtils.equalsIgnoreCase("battery", view.getType()) || StringUtils.equalsIgnoreCase("gauge", view.getType()) || StringUtils.equalsIgnoreCase("liquid", view.getType())) {
+                if (StringUtils.equalsIgnoreCase("text", view.getType()) || StringUtils.equalsIgnoreCase("gauge", view.getType()) || StringUtils.equalsIgnoreCase("liquid", view.getType())) {
                     datasourceRequest.setQuery(qp.getSQLSummaryAsTmp(sql, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, view));
                 } else if (StringUtils.containsIgnoreCase(view.getType(), "stack")) {
                     datasourceRequest.setQuery(qp.getSQLAsTmpStack(sql, xAxis, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, extStack, view));
@@ -498,7 +500,7 @@ public class ChartViewService {
                 DataTableInfoDTO dt = gson.fromJson(table.getInfo(), DataTableInfoDTO.class);
                 List<DataSetTableUnionDTO> list = dataSetTableUnionService.listByTableId(dt.getList().get(0).getTableId());
                 String sql = dataSetTableService.getCustomSQLDatasource(dt, list, ds);
-                if (StringUtils.equalsIgnoreCase("text", view.getType()) || StringUtils.equalsIgnoreCase("battery", view.getType()) || StringUtils.equalsIgnoreCase("gauge", view.getType()) || StringUtils.equalsIgnoreCase("liquid", view.getType())) {
+                if (StringUtils.equalsIgnoreCase("text", view.getType()) || StringUtils.equalsIgnoreCase("gauge", view.getType()) || StringUtils.equalsIgnoreCase("liquid", view.getType())) {
                     datasourceRequest.setQuery(qp.getSQLSummaryAsTmp(sql, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, view));
                 } else if (StringUtils.containsIgnoreCase(view.getType(), "stack")) {
                     datasourceRequest.setQuery(qp.getSQLAsTmpStack(sql, xAxis, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, extStack, view));
@@ -514,7 +516,7 @@ public class ChartViewService {
                 Map<String, Object> sqlMap = dataSetTableService.getUnionSQLDatasource(dt, ds);
                 String sql = (String) sqlMap.get("sql");
 
-                if (StringUtils.equalsIgnoreCase("text", view.getType()) || StringUtils.equalsIgnoreCase("battery", view.getType()) || StringUtils.equalsIgnoreCase("gauge", view.getType()) || StringUtils.equalsIgnoreCase("liquid", view.getType())) {
+                if (StringUtils.equalsIgnoreCase("text", view.getType()) || StringUtils.equalsIgnoreCase("gauge", view.getType()) || StringUtils.equalsIgnoreCase("liquid", view.getType())) {
                     datasourceRequest.setQuery(qp.getSQLSummaryAsTmp(sql, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, view));
                 } else if (StringUtils.containsIgnoreCase(view.getType(), "stack")) {
                     datasourceRequest.setQuery(qp.getSQLAsTmpStack(sql, xAxis, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, extStack, view));
@@ -527,15 +529,19 @@ public class ChartViewService {
                 }
             }
             List<ChartViewFieldDTO> xAxisForRequest = new ArrayList<>();
-            xAxisForRequest.addAll(xAxis); xAxisForRequest.addAll(extStack);
+            xAxisForRequest.addAll(xAxis);
+            xAxisForRequest.addAll(extStack);
             datasourceRequest.setXAxis(xAxisForRequest);
+            List<ChartViewFieldDTO> yAxisForRequest = new ArrayList<>();
+            yAxisForRequest.addAll(yAxis);
+            datasourceRequest.setYAxis(yAxisForRequest);
             data = datasourceProvider.getData(datasourceRequest);
         } else if (table.getMode() == 1) {// 抽取
             datasourceRequest.setDatasource(ds);
             String tableName = "ds_" + table.getId().replaceAll("-", "_");
             datasourceRequest.setTable(tableName);
             QueryProvider qp = ProviderFactory.getQueryProvider(ds.getType());
-            if (StringUtils.equalsIgnoreCase("text", view.getType()) || StringUtils.equalsIgnoreCase("battery", view.getType()) || StringUtils.equalsIgnoreCase("gauge", view.getType()) || StringUtils.equalsIgnoreCase("liquid", view.getType())) {
+            if (StringUtils.equalsIgnoreCase("text", view.getType()) || StringUtils.equalsIgnoreCase("gauge", view.getType()) || StringUtils.equalsIgnoreCase("liquid", view.getType())) {
                 datasourceRequest.setQuery(qp.getSQLSummary(tableName, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, view, ds));
             } else if (StringUtils.containsIgnoreCase(view.getType(), "stack")) {
                 datasourceRequest.setQuery(qp.getSQLStack(tableName, xAxis, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, extStack, ds, view));
@@ -600,11 +606,12 @@ public class ChartViewService {
         List<ChartViewFieldDTO> xAxisExt = gson.fromJson(view.getXAxisExt(), tokenType);
         if (StringUtils.equalsIgnoreCase(view.getType(), "table-pivot")
                 || StringUtils.containsIgnoreCase(view.getType(), "group")
-                || ("antv".equalsIgnoreCase(view.getRender()) && "line".equalsIgnoreCase(view.getType()))) {
+                || ("antv".equalsIgnoreCase(view.getRender()) && "line".equalsIgnoreCase(view.getType()))
+                || StringUtils.equalsIgnoreCase(view.getType(), "flow-map")) {
             xAxis.addAll(xAxisExt);
         }
         List<ChartViewFieldDTO> yAxis = gson.fromJson(view.getYAxis(), tokenType);
-        if (StringUtils.equalsIgnoreCase(view.getType(), "chart-mix")) {
+        if (StringUtils.equalsAnyIgnoreCase(view.getType(), "chart-mix","bidirectional-bar")) {
             List<ChartViewFieldDTO> yAxisExt = gson.fromJson(view.getYAxisExt(), tokenType);
             yAxis.addAll(yAxisExt);
         }
@@ -656,7 +663,7 @@ public class ChartViewService {
         Map<String, Object> mapAttr = gson.fromJson(view.getCustomAttr(), Map.class);
         Map<String, Object> mapSize = (Map<String, Object>) mapAttr.get("size");
         if (StringUtils.equalsIgnoreCase(view.getType(), "table-info") && table.getMode() == 0) {
-            if (StringUtils.equalsIgnoreCase((String) mapSize.get("tablePageMode"), "page")) {
+            if (StringUtils.equalsIgnoreCase((String) mapSize.get("tablePageMode"), "page") && !chartExtRequest.getExcelExportFlag()) {
                 if (chartExtRequest.getGoPage() == null) {
                     chartExtRequest.setGoPage(1L);
                 }
@@ -668,7 +675,7 @@ public class ChartViewService {
                 if (StringUtils.equalsIgnoreCase(view.getResultMode(), "custom")) {
                     chartExtRequest.setGoPage(1L);
                     chartExtRequest.setPageSize(view.getResultCount().longValue());
-                } else {
+                } else if (!chartExtRequest.getExcelExportFlag()) {
                     chartExtRequest.setGoPage(null);
                     chartExtRequest.setPageSize(null);
                 }
@@ -687,7 +694,6 @@ public class ChartViewService {
                 }
                 break;
             case "text":
-            case "battery":
             case "gauge":
             case "liquid":
                 xAxis = new ArrayList<>();
@@ -709,6 +715,7 @@ public class ChartViewService {
                 break;
             case "bar-group":
             case "bar-group-stack":
+            case "flow-map":
                 xAxis = xAxis.stream().filter(item -> chartViewFieldNameList.contains(item.getDataeaseName()) || (!desensitizationList.keySet().contains(item.getDataeaseName()) && dataeaseNames.contains(item.getDataeaseName()))).collect(Collectors.toList());
                 yAxis = yAxis.stream().filter(item -> chartViewFieldNameList.contains(item.getDataeaseName()) || (!desensitizationList.keySet().contains(item.getDataeaseName()) && dataeaseNames.contains(item.getDataeaseName()))).collect(Collectors.toList());
                 xAxisBase = xAxisBase.stream().filter(item -> chartViewFieldNameList.contains(item.getDataeaseName()) || (!desensitizationList.keySet().contains(item.getDataeaseName()) && dataeaseNames.contains(item.getDataeaseName()))).collect(Collectors.toList());
@@ -718,7 +725,9 @@ public class ChartViewService {
                 xAxis = xAxis.stream().filter(item -> chartViewFieldNameList.contains(item.getDataeaseName()) || (!desensitizationList.keySet().contains(item.getDataeaseName()) && dataeaseNames.contains(item.getDataeaseName()))).collect(Collectors.toList());
                 yAxis = yAxis.stream().filter(item -> chartViewFieldNameList.contains(item.getDataeaseName()) || (!desensitizationList.keySet().contains(item.getDataeaseName()) && dataeaseNames.contains(item.getDataeaseName()))).collect(Collectors.toList());
         }
-
+        Map<String, ChartViewFieldDTO> chartFieldMap = Stream.of(xAxisBase, xAxisExt, extStack)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toMap(ChartViewFieldDTO::getId, o -> o, ((p, n) -> p)));
         // 过滤来自仪表板的条件
         List<ChartExtFilterRequest> extFilterList = new ArrayList<>();
         //组件过滤条件
@@ -827,6 +836,14 @@ public class ChartViewService {
                 if (!desensitizationList.keySet().contains(datasetTableField.getDataeaseName()) && dataeaseNames.contains(datasetTableField.getDataeaseName())) {
                     request.setDatasetTableField(datasetTableField);
                     if (StringUtils.equalsIgnoreCase(datasetTableField.getTableId(), view.getTableId())) {
+//                         设置日期格式，以视图字段设置的格式为准，先不处理组件的条件，因为格式无法统一。
+                        if (request.getDatasetTableField() != null) {
+                            ChartViewFieldDTO chartViewFieldDTO = chartFieldMap.get(request.getDatasetTableField().getId());
+                            if (chartViewFieldDTO != null) {
+                                request.setDatePattern(chartViewFieldDTO.getDatePattern());
+                                request.setDateStyle(chartViewFieldDTO.getDateStyle());
+                            }
+                        }
                         if (CollectionUtils.isNotEmpty(request.getViewIds())) {
                             if (request.getViewIds().contains(view.getId())) {
                                 extFilterList.add(request);
@@ -842,34 +859,56 @@ public class ChartViewService {
         // 下钻
         List<ChartExtFilterRequest> drillFilters = new ArrayList<>();
         boolean isDrill = false;
-        List<ChartDrillRequest> drillRequest = chartExtRequest.getDrill();
-        if (CollectionUtils.isNotEmpty(drillRequest) && (drill.size() > drillRequest.size())) {
-            for (int i = 0; i < drillRequest.size(); i++) {
-                ChartDrillRequest request = drillRequest.get(i);
-                for (ChartDimensionDTO dto : request.getDimensionList()) {
-                    ChartViewFieldDTO chartViewFieldDTO = drill.get(i);
-                    // 将钻取值作为条件传递，将所有钻取字段作为xAxis并加上下一个钻取字段
-                    if (StringUtils.equalsIgnoreCase(dto.getId(), chartViewFieldDTO.getId())) {
-                        isDrill = true;
-                        DatasetTableField datasetTableField = dataSetTableFieldsService.get(dto.getId());
-                        ChartViewFieldDTO d = new ChartViewFieldDTO();
-                        BeanUtils.copyBean(d, datasetTableField);
-
-                        ChartExtFilterRequest drillFilter = new ChartExtFilterRequest();
-                        drillFilter.setFieldId(dto.getId());
-                        drillFilter.setValue(Collections.singletonList(dto.getValue()));
-                        drillFilter.setOperator("in");
-                        drillFilter.setDatasetTableField(datasetTableField);
-                        extFilterList.add(drillFilter);
-
-                        drillFilters.add(drillFilter);
-
-                        if (!checkDrillExist(xAxis, extStack, d, view)) {
-                            xAxis.add(d);
+        List<ChartDrillRequest> drillRequestList = chartExtRequest.getDrill();
+        if (CollectionUtils.isNotEmpty(drillRequestList) && (drill.size() > drillRequestList.size())) {
+            ArrayList<ChartViewFieldDTO> fieldsToFilter = new ArrayList<>();
+//            如果是从子维度开始下钻，那么其他维度的条件要先加上去
+//            分组和堆叠
+            if (StringUtils.containsIgnoreCase(view.getType(), "group")) {
+//              分组堆叠
+                if (StringUtils.containsIgnoreCase(view.getType(), "stack")) {
+//                  分组和堆叠字段都有才有效
+                    if (CollectionUtils.isNotEmpty(xAxisExt) && CollectionUtils.isNotEmpty(extStack)) {
+//                      从分组字段下钻，就加上堆叠字段的条件
+                        if (StringUtils.equalsIgnoreCase(drill.get(0).getId(), xAxisExt.get(0).getId())) {
+                            fieldsToFilter.addAll(xAxisBase);
+                            fieldsToFilter.addAll(extStack);
                         }
-                        if (i == drillRequest.size() - 1) {
+//                      从堆叠字段下钻，就加上分组字段的条件
+                        if (StringUtils.equalsIgnoreCase(drill.get(0).getId(), extStack.get(0).getId())) {
+                            fieldsToFilter.addAll(xAxisBase);
+                            fieldsToFilter.addAll(xAxisExt);
+                        }
+                    }
+                } else if (CollectionUtils.isNotEmpty(xAxisExt) &&
+                        StringUtils.equalsIgnoreCase(drill.get(0).getId(), xAxisExt.get(0).getId())) {
+                    fieldsToFilter.addAll(xAxisBase);
+                }
+            } else if (StringUtils.containsIgnoreCase(view.getType(), "stack") &&
+                    CollectionUtils.isNotEmpty(extStack) &&
+                    StringUtils.equalsIgnoreCase(drill.get(0).getId(), extStack.get(0).getId())) {
+//              堆叠
+                fieldsToFilter.addAll(xAxisBase);
+            }
+            ChartDrillRequest head = drillRequestList.get(0);
+            Map<String, String> dimValMap = new HashMap<>();
+            head.getDimensionList().forEach(item -> dimValMap.put(item.getId(), item.getValue()));
+            for (int i = 0; i < drillRequestList.size(); i++) {
+                ChartDrillRequest request = drillRequestList.get(i);
+                ChartViewFieldDTO chartViewFieldDTO = drill.get(i);
+                for (ChartDimensionDTO requestDimension : request.getDimensionList()) {
+                    // 将钻取值作为条件传递，将所有钻取字段作为xAxis并加上下一个钻取字段
+                    if (StringUtils.equalsIgnoreCase(requestDimension.getId(), chartViewFieldDTO.getId())) {
+                        isDrill = true;
+                        fieldsToFilter.add(chartViewFieldDTO);
+                        dimValMap.put(requestDimension.getId(), requestDimension.getValue());
+                        if (!checkDrillExist(xAxis, extStack, requestDimension.getId(), view)) {
+                            chartFieldMap.put(chartViewFieldDTO.getId(), chartViewFieldDTO);
+                            xAxis.add(chartViewFieldDTO);
+                        }
+                        if (i == drillRequestList.size() - 1) {
                             ChartViewFieldDTO nextDrillField = drill.get(i + 1);
-                            if (!checkDrillExist(xAxis, extStack, nextDrillField, view)) {
+                            if (!checkDrillExist(xAxis, extStack, nextDrillField.getId(), view)) {
                                 // get drill list first element's sort,then assign to nextDrillField
                                 nextDrillField.setSort(getDrillSort(xAxis, drill.get(0)));
                                 xAxis.add(nextDrillField);
@@ -877,6 +916,19 @@ public class ChartViewService {
                         }
                     }
                 }
+            }
+            for (int i = 0; i < fieldsToFilter.size(); i++) {
+                ChartViewFieldDTO tmpField = fieldsToFilter.get(i);
+                ChartExtFilterRequest tmpFilter = new ChartExtFilterRequest();
+                DatasetTableField datasetTableField = dataSetTableFieldsService.get(tmpField.getId());
+                tmpFilter.setDatasetTableField(datasetTableField);
+                tmpFilter.setOperator("in");
+                tmpFilter.setDateStyle(chartFieldMap.get(tmpField.getId()).getDateStyle());
+                tmpFilter.setDatePattern(chartFieldMap.get(tmpField.getId()).getDatePattern());
+                tmpFilter.setFieldId(tmpField.getId());
+                tmpFilter.setValue(Collections.singletonList(dimValMap.get(tmpField.getId())));
+                extFilterList.add(tmpFilter);
+                drillFilters.add(tmpFilter);
             }
         }
 
@@ -901,6 +953,25 @@ public class ChartViewService {
         ) {
             assistFields = getAssistFields(dynamicAssistFields, yAxis);
         }
+
+        // 处理过滤条件中的单引号
+        fieldCustomFilter = fieldCustomFilter.stream().peek(ele -> {
+            if (CollectionUtils.isNotEmpty(ele.getEnumCheckField())) {
+                List<String> collect = ele.getEnumCheckField().stream().map(SQLUtils::transKeyword).collect(Collectors.toList());
+                ele.setEnumCheckField(collect);
+            }
+            if (CollectionUtils.isNotEmpty(ele.getFilter())) {
+                List<ChartCustomFilterItemDTO> collect = ele.getFilter().stream().peek(f -> f.setValue(SQLUtils.transKeyword(f.getValue()))).collect(Collectors.toList());
+                ele.setFilter(collect);
+            }
+        }).collect(Collectors.toList());
+
+        extFilterList = extFilterList.stream().peek(ele -> {
+            if (CollectionUtils.isNotEmpty(ele.getValue())) {
+                List<String> collect = ele.getValue().stream().map(SQLUtils::transKeyword).collect(Collectors.toList());
+                ele.setValue(collect);
+            }
+        }).collect(Collectors.toList());
 
         // 如果是插件视图 走插件内部的逻辑
         if (ObjectUtils.isNotEmpty(view.getIsPlugin()) && view.getIsPlugin()) {
@@ -956,7 +1027,7 @@ public class ChartViewService {
             QueryProvider qp = ProviderFactory.getQueryProvider(ds.getType());
             if (StringUtils.equalsIgnoreCase(table.getType(), DatasetType.DB.name())) {
                 datasourceRequest.setTable(dataTableInfoDTO.getTable());
-                if (StringUtils.equalsAnyIgnoreCase(view.getType(), "text","battery", "gauge", "liquid")) {
+                if (StringUtils.equalsAnyIgnoreCase(view.getType(), "text", "gauge", "liquid")) {
                     querySql = qp.getSQLSummary(dataTableInfoDTO.getTable(), yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, view, ds);
                 } else if (StringUtils.containsIgnoreCase(view.getType(), "stack")) {
                     querySql = qp.getSQLStack(dataTableInfoDTO.getTable(), xAxis, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, extStack, ds, view);
@@ -976,7 +1047,7 @@ public class ChartViewService {
             } else if (StringUtils.equalsIgnoreCase(table.getType(), DatasetType.SQL.name())) {
                 String sql = dataTableInfoDTO.isBase64Encryption() ? new String(java.util.Base64.getDecoder().decode(dataTableInfoDTO.getSql())) : dataTableInfoDTO.getSql();
                 sql = handleVariable(sql, chartExtRequest, qp, table, ds);
-                if (StringUtils.equalsAnyIgnoreCase(view.getType(), "text","battery", "gauge", "liquid")) {
+                if (StringUtils.equalsAnyIgnoreCase(view.getType(), "text", "gauge", "liquid")) {
                     querySql = qp.getSQLSummaryAsTmp(sql, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, view);
                 } else if (StringUtils.containsIgnoreCase(view.getType(), "stack")) {
                     querySql = qp.getSQLAsTmpStack(sql, xAxis, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, extStack, view);
@@ -997,7 +1068,7 @@ public class ChartViewService {
                 DataTableInfoDTO dt = gson.fromJson(table.getInfo(), DataTableInfoDTO.class);
                 List<DataSetTableUnionDTO> list = dataSetTableUnionService.listByTableId(dt.getList().get(0).getTableId());
                 String sql = dataSetTableService.getCustomSQLDatasource(dt, list, ds);
-                if (StringUtils.equalsAnyIgnoreCase(view.getType(), "text","battery", "gauge", "liquid")) {
+                if (StringUtils.equalsAnyIgnoreCase(view.getType(), "text", "gauge", "liquid")) {
                     querySql = qp.getSQLSummaryAsTmp(sql, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, view);
                 } else if (StringUtils.containsIgnoreCase(view.getType(), "stack")) {
                     querySql = qp.getSQLAsTmpStack(sql, xAxis, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, extStack, view);
@@ -1018,7 +1089,7 @@ public class ChartViewService {
                 DataTableInfoDTO dt = gson.fromJson(table.getInfo(), DataTableInfoDTO.class);
                 Map<String, Object> sqlMap = dataSetTableService.getUnionSQLDatasource(dt, ds);
                 String sql = (String) sqlMap.get("sql");
-                if (StringUtils.equalsAnyIgnoreCase(view.getType(), "text","battery", "gauge", "liquid")) {
+                if (StringUtils.equalsAnyIgnoreCase(view.getType(), "text", "gauge", "liquid")) {
                     querySql = qp.getSQLSummaryAsTmp(sql, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, view);
                 } else if (StringUtils.containsIgnoreCase(view.getType(), "stack")) {
                     querySql = qp.getSQLAsTmpStack(sql, xAxis, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, extStack, view);
@@ -1038,6 +1109,7 @@ public class ChartViewService {
             }
             if (StringUtils.isNotEmpty(totalPageSql) && StringUtils.equalsIgnoreCase((String) mapSize.get("tablePageMode"), "page")) {
                 datasourceRequest.setQuery(totalPageSql);
+                datasourceRequest.setTotalPageFlag(true);
                 java.util.List<java.lang.String[]> tmpData = datasourceProvider.getData(datasourceRequest);
                 totalItems = CollectionUtils.isEmpty(tmpData) ? 0 : Long.valueOf(tmpData.get(0)[0]);
                 totalPage = (totalItems / pageInfo.getPageSize()) + (totalItems % pageInfo.getPageSize() > 0 ? 1 : 0);
@@ -1045,8 +1117,13 @@ public class ChartViewService {
 
             datasourceRequest.setQuery(querySql);
             List<ChartViewFieldDTO> xAxisForRequest = new ArrayList<>();
-            xAxisForRequest.addAll(xAxis); xAxisForRequest.addAll(extStack);
+            xAxisForRequest.addAll(xAxis);
+            xAxisForRequest.addAll(extStack);
             datasourceRequest.setXAxis(xAxisForRequest);
+            List<ChartViewFieldDTO> yAxisForRequest = new ArrayList<>();
+            yAxisForRequest.addAll(yAxis);
+            datasourceRequest.setYAxis(yAxisForRequest);
+            datasourceRequest.setTotalPageFlag(false);
             data = datasourceProvider.getData(datasourceRequest);
             if (CollectionUtils.isNotEmpty(assistFields)) {
                 datasourceAssistRequest.setQuery(assistSQL(datasourceRequest.getQuery(), assistFields));
@@ -1064,7 +1141,7 @@ public class ChartViewService {
             String tableName = "ds_" + table.getId().replaceAll("-", "_");
             datasourceRequest.setTable(tableName);
             QueryProvider qp = ProviderFactory.getQueryProvider(ds.getType());
-            if (StringUtils.equalsAnyIgnoreCase(view.getType(), "text","battery", "gauge", "liquid")) {
+            if (StringUtils.equalsAnyIgnoreCase(view.getType(), "text", "gauge", "liquid")) {
                 datasourceRequest.setQuery(qp.getSQLSummary(tableName, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, view, ds));
             } else if (StringUtils.containsIgnoreCase(view.getType(), "stack")) {
                 datasourceRequest.setQuery(qp.getSQLStack(tableName, xAxis, yAxis, fieldCustomFilter, rowPermissionsTree, extFilterList, extStack, ds, view));
@@ -1237,7 +1314,6 @@ public class ChartViewService {
                 mapChart = ChartDataBuild.transRadarChartData(xAxis, yAxis, view, data, isDrill);
             } else if (StringUtils.containsIgnoreCase(view.getType(), "text")
                     || StringUtils.containsIgnoreCase(view.getType(), "gauge")
-                    || StringUtils.containsIgnoreCase(view.getType(), "battery")
                     || StringUtils.equalsIgnoreCase("liquid", view.getType())) {
                 mapChart = ChartDataBuild.transNormalChartData(xAxis, yAxis, view, data, isDrill);
             } else if (StringUtils.containsIgnoreCase(view.getType(), "chart-mix")) {
@@ -1261,7 +1337,6 @@ public class ChartViewService {
             } else if (StringUtils.containsIgnoreCase(view.getType(), "radar")) {
                 mapChart = ChartDataBuild.transRadarChartDataAntV(xAxis, yAxis, view, data, isDrill);
             } else if (StringUtils.containsIgnoreCase(view.getType(), "text")
-                    || StringUtils.containsIgnoreCase(view.getType(), "battery")
                     || StringUtils.containsIgnoreCase(view.getType(), "gauge")
                     || StringUtils.equalsIgnoreCase("liquid", view.getType())) {
                 mapChart = ChartDataBuild.transNormalChartData(xAxis, yAxis, view, data, isDrill);
@@ -1269,6 +1344,8 @@ public class ChartViewService {
                 mapChart = ChartDataBuild.transMixChartDataAntV(xAxis, yAxis, view, data, isDrill);
             } else if (StringUtils.containsIgnoreCase(view.getType(), "label")) {
                 mapChart = ChartDataBuild.transLabelChartData(xAxis, yAxis, view, data, isDrill);
+            } else if (StringUtils.containsIgnoreCase(view.getType(), "bidirectional-bar")) {
+                mapChart = ChartDataBuild.transBidirectionalBarData(xAxis, yAxis, view, data, isDrill);
             } else {
                 mapChart = ChartDataBuild.transChartDataAntV(xAxis, yAxis, view, data, isDrill);
             }
@@ -1516,17 +1593,17 @@ public class ChartViewService {
         }
     }
 
-    private boolean checkDrillExist(List<ChartViewFieldDTO> xAxis, List<ChartViewFieldDTO> extStack, ChartViewFieldDTO dto, ChartViewWithBLOBs view) {
+    private boolean checkDrillExist(List<ChartViewFieldDTO> xAxis, List<ChartViewFieldDTO> extStack, String fieldId, ChartViewWithBLOBs view) {
         if (CollectionUtils.isNotEmpty(xAxis)) {
             for (ChartViewFieldDTO x : xAxis) {
-                if (StringUtils.equalsIgnoreCase(x.getId(), dto.getId())) {
+                if (StringUtils.equalsIgnoreCase(x.getId(), fieldId)) {
                     return true;
                 }
             }
         }
         if (StringUtils.containsIgnoreCase(view.getType(), "stack") && CollectionUtils.isNotEmpty(extStack)) {
             for (ChartViewFieldDTO x : extStack) {
-                if (StringUtils.equalsIgnoreCase(x.getId(), dto.getId())) {
+                if (StringUtils.equalsIgnoreCase(x.getId(), fieldId)) {
                     return true;
                 }
             }
@@ -1823,7 +1900,7 @@ public class ChartViewService {
                 }
             }
         }
-        sql = dataSetTableService.removeVariables(sql, ds.getType());
+        sql = dataSetTableService.handleVariableDefaultValue(sql, null, ds.getType(), false);
         return sql;
     }
 

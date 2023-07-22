@@ -80,7 +80,7 @@ public class DataSetTableTaskLogService {
                 row[0] = item.getName();
                 row[1] = item.getDatasetName();
                 row[2] = DateUtil.formatDateTime(new Date(item.getStartTime()));
-                row[3] = DateUtil.formatDateTime(new Date(item.getEndTime()));
+                row[3] = item.getEndTime() != null ? DateUtil.formatDateTime(new Date(item.getEndTime())) : "";
                 row[4] = Translator.get("I18N_TASK_LOG_" + item.getStatus().toUpperCase()) ;
                 return row;
             }).collect(Collectors.toList());
@@ -156,6 +156,12 @@ public class DataSetTableTaskLogService {
         entity2.setOperator("eq");
         entity2.setValue("1");
         conditionEntities.add(entity2);
+        conditionEntities = conditionEntities.stream().map(conditionEntity -> {
+            if(conditionEntity.getField().equals("dataset_table_task.last_exec_status")){
+                conditionEntity.setField("dataset_table_task_log.status");
+            }
+            return conditionEntity;
+        }).collect(Collectors.toList());
         request.setConditions(conditionEntities);
 
         GridExample gridExample = request.convertExample();

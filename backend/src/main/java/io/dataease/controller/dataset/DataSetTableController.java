@@ -1,10 +1,5 @@
 package io.dataease.controller.dataset;
 
-import cn.hutool.json.JSONObject;
-import io.dataease.service.db.DBoperationService;
-
-import java.sql.SQLException;
-
 import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
 import com.github.xiaoymin.knife4j.annotations.ApiSupport;
@@ -21,6 +16,7 @@ import io.dataease.controller.handler.annotation.I18n;
 import io.dataease.controller.request.dataset.DataSetExportRequest;
 import io.dataease.controller.request.dataset.DataSetTableRequest;
 import io.dataease.controller.response.DataSetDetail;
+import io.dataease.dto.authModel.VAuthModelDTO;
 import io.dataease.dto.dataset.DataSetTableDTO;
 import io.dataease.dto.dataset.ExcelFileData;
 import io.dataease.plugins.common.base.domain.DatasetSqlLog;
@@ -29,17 +25,19 @@ import io.dataease.plugins.common.base.domain.DatasetTableField;
 import io.dataease.plugins.common.base.domain.DatasetTableIncrementalConfig;
 import io.dataease.plugins.common.dto.dataset.SqlVariableDetails;
 import io.dataease.plugins.common.dto.datasource.TableField;
+import io.dataease.service.authModel.VAuthModelService;
 import io.dataease.service.dataset.DataSetTableService;
 import io.swagger.annotations.*;
 import org.apache.shiro.authz.annotation.Logical;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletResponse;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * @Author gin
@@ -48,13 +46,13 @@ import java.util.*;
 @Api(tags = "数据集：数据集表")
 @ApiSupport(order = 50)
 @RestController
-@CrossOrigin
 @RequestMapping("dataset/table")
 public class DataSetTableController {
     @Resource
     private DataSetTableService dataSetTableService;
+
     @Resource
-    private DBoperationService dbService;
+    private VAuthModelService vAuthModelService;
 
     @DePermissions(value = {
             @DePermission(type = DePermissionType.DATASET, value = "id"),
@@ -62,8 +60,9 @@ public class DataSetTableController {
     }, logical = Logical.AND)
     @ApiOperation("批量保存")
     @PostMapping("batchAdd")
-    public List<DatasetTable> batchAdd(@RequestBody List<DataSetTableRequest> datasetTable) throws Exception {
-        return dataSetTableService.batchInsert(datasetTable);
+    public List<VAuthModelDTO> batchAdd(@RequestBody List<DataSetTableRequest> datasetTable) throws Exception {
+        List<String> ids = dataSetTableService.batchInsert(datasetTable).stream().map(DatasetTable::getId).collect(Collectors.toList());
+        return vAuthModelService.queryAuthModelByIds("dataset", ids);
     }
 
     @DePermissions(value = {
@@ -73,11 +72,12 @@ public class DataSetTableController {
     }, logical = Logical.AND)
     @ApiOperation("更新")
     @PostMapping("update")
-    public List<DatasetTable> save(@RequestBody DataSetTableRequest datasetTable) throws Exception {
+    public List<VAuthModelDTO> save(@RequestBody DataSetTableRequest datasetTable) throws Exception {
         if (datasetTable.getType().equalsIgnoreCase("excel")) {
-            return dataSetTableService.saveExcel(datasetTable);
+            List<String> ids = dataSetTableService.saveExcel(datasetTable).stream().map(DatasetTable::getId).collect(Collectors.toList());
+            return vAuthModelService.queryAuthModelByIds("dataset", ids);
         } else {
-            return Collections.singletonList(dataSetTableService.save(datasetTable));
+            return vAuthModelService.queryAuthModelByIds("dataset", Collections.singletonList(dataSetTableService.save(datasetTable).getId()));
         }
     }
 
@@ -170,7 +170,7 @@ public class DataSetTableController {
             @DePermission(type = DePermissionType.DATASOURCE, value = "dataSourceId", level = ResourceAuthLevel.DATASOURCE_LEVEL_USE)
     }, logical = Logical.AND)
     public ResultHolder getSQLPreview(@RequestBody DataSetTableRequest dataSetTableRequest) throws Exception {
-        return dataSetTableService.getSQLPreview(dataSetTableRequest);
+        return dataSetTableService.getSQLPreview(dataSetTableRequest, true);
     }
 
     @ApiOperation("根据sql查询预览数据")
@@ -265,68 +265,6 @@ public class DataSetTableController {
     @PostMapping("/getDatasetNameFromGroup/{sceneId}")
     public List<String> getDatasetNameFromGroup(@PathVariable String sceneId) {
         return dataSetTableService.getDatasetNameFromGroup(sceneId);
-    }
-
-
-    @PostMapping("/makerwit/selectTableDate")
-    @ResponseBody
-    public Map<String, Object> selectTableDate(@RequestBody String json) {
-        JSONObject jsonObject = new JSONObject(json);
-        Map map = new HashMap();
-        try {
-            map.put("list",dbService.select(jsonObject));
-        } catch (SQLException throwables) {
-            throw new RuntimeException("查询失败，请检查数据：" + throwables.getMessage());
-        }
-        return map;
-    }
-
-    /**
-     * 添加表格数据
-     *
-     * @param jsonStr
-     * @return
-     */
-    @PostMapping("/makerwit/addTableData")
-    public void addTableData(@RequestBody String jsonStr) {
-        JSONObject jsonObject = new JSONObject(jsonStr);
-        try {
-            dbService.insert(jsonObject);
-        } catch (SQLException throwables) {
-            throw new RuntimeException("添加失败，请检查数据：" + throwables.getMessage());
-        }
-    }
-
-    /**
-     * 修改表格数据
-     *
-     * @param jsonStr
-     * @return
-     */
-    @PostMapping("/makerwit/updateTableData")
-    public void updateTableData(@RequestBody String jsonStr) {
-        JSONObject jsonObject = new JSONObject(jsonStr);
-        try {
-            dbService.update(jsonObject);
-        } catch (SQLException throwables) {
-            throw new RuntimeException("修改失败，请检查数据：" + throwables.getMessage());
-        }
-    }
-
-    /**
-     * 删除表格数据
-     *
-     * @param jsonStr
-     * @return
-     */
-    @PostMapping("/makerwit/deleteTableData")
-    public void deleteTableData(@RequestBody String jsonStr) {
-        JSONObject jsonObject = new JSONObject(jsonStr);
-        try {
-            dbService.delete(jsonObject);
-        } catch (SQLException throwables) {
-            throw new RuntimeException("删除失败，请检查数据：" + throwables.getMessage());
-        }
     }
 
     @ApiOperation("数据集导出")
